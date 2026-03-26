@@ -14,7 +14,7 @@ const getRouteCoordinates = async (source, destination) => {
           Authorization: process.env.OPEN_ROUTE_SERVICE_API,
           Accept: "application/json, application/geo+json"
         }
-      },{timeout: 10000} // 10 seconds
+      },{timeout: 10000} 
     );
 
     const data = response.data;

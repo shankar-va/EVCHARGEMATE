@@ -53,18 +53,13 @@ const chargingStationSchema=new mongoose.Schema({
         type:Number,
         required:true
     },
-
-    slotsPerHour:{
-        type:Number,
-        
-    },
     operatingHours:{
         type:Number,
         
     },
     rating:{
         type:Number,
-        default:3
+        default:4
     },
     createdByAdmin:{
         type:mongoose.Schema.Types.ObjectId,
@@ -75,6 +70,16 @@ const chargingStationSchema=new mongoose.Schema({
         ref:'bookings',
         
     },
+    pricePerUnit: {
+        type: Number, // ₹ per kWh
+        required: true,
+        default: 12
+    },
+
+    slotsPerHour: {
+        type: Number, // optional fallback
+        default: 100
+    }
 
 },{timestamps:true});
 chargingStationSchema.index({location:"2dsphere"});

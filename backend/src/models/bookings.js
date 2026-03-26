@@ -21,14 +21,33 @@ const bookingSchema=new mongoose.Schema({
         enum:['pending','success','refunded'],
         required:true,
     },
+    razorpayOrderId:{
+        type:String,
+        
+    },
+    razorpayPaymentId:{
+        type:String
+    },
     qrCodeUrl:{
         type:String,
-        required:true,
+        
     },
     amount:{
         type:Number,
         required:true
     },
+    date: {
+        type: String,
+        required: true
+        },
+        timeSlots: {
+        type: [String],
+        required: true
+    },
+    expiresAt: {
+        type: Date,
+        required: true
+    }
 
 },{timestamps:true});
 

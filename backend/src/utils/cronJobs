@@ -1,0 +1,40 @@
+const Booking = require("../models/bookings");
+const Slot = require("../models/slot");
+
+const expireBookings = async () => {
+  try {
+    const now = new Date();
+
+    const expiredBookings = await Booking.find({
+      paymentStatus: "pending",
+      expiresAt: { $lt: now }
+    });
+
+    for (const booking of expiredBookings) {
+
+      // 🔥 RELEASE SLOTS
+      for (const slot of booking.timeSlots) {
+        await Slot.findOneAndUpdate(
+          {
+            stationId: booking.stationId,
+            date: booking.date,
+            timeSlot: slot
+          },
+          {
+            $inc: { bookedCount: -1 }
+          }
+        );
+      }
+
+      booking.status = "cancelled";
+      await booking.save();
+    }
+
+    console.log(`Expired ${expiredBookings.length} bookings`);
+
+  } catch (err) {
+    console.error("CRON ERROR:", err);
+  }
+};
+
+module.exports = { expireBookings };
