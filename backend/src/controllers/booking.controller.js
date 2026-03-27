@@ -11,7 +11,7 @@ const bookAndCreateOrder = async (req, res) => {
       units
     } = req.body;
 
-    const userId = req.user.id;
+    const userId = req.user.userId || req.user._id || req.user.id;
 
     if (!stationId || !date || !startTime || !endTime) {
       return res.status(400).json({

@@ -2,10 +2,11 @@ const express=require('express');
 const jwt=require('jsonwebtoken');
 const router=express.Router();
 const passport=require('../config/passport');
-const {register,login}=require('../controllers/auth.controller');
+const {register,login,getSession}=require('../controllers/auth.controller');
 const authenticate=require('../middleware/auth.middleware');
 const authorize=require('../validators/auth.validators')
 
+router.get('/session', authenticate, getSession);
 
 router.post('/register',register('user'));
 
@@ -26,11 +27,8 @@ router.get('/auth/google/callback',
             sameSite:'strict',
             httpOnly:true
         });
-        res.status(200).json({
-            success:true,
-            message:`User Logged In successfully`,
-            data:req.user
-        })
+        // Success: Redirect straight into the beautiful new client dashboard
+        res.redirect('http://localhost:5173/dashboard');
     }catch(error){
         return res.status(400).json({
             success:false,

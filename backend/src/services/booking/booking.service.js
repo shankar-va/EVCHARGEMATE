@@ -1,129 +1,56 @@
 const mongoose = require("mongoose");
-const Slot = require("../../models/slot");
 const Booking = require("../../models/bookings");
 const ChargingStation = require("../../models/chargingStation");
-const generateTimeSlots = require("../../utils/slotGenerator");
 
-const createBooking = async ({
-  userId,
-  stationId,
-  date,
-  startTime,
-  endTime,
-  units // 🔥 NEW (kWh user wants)
-}) => {
+const UNIT_PRICE = 15; // ₹15 per kWh
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
+const createBooking = async (bookingData) => {
+  const { userId, stationId, date, startTime, endTime, units } = bookingData;
 
-  try {
+  // 1. Calculate amount
+  const amount = units * UNIT_PRICE;
 
-    const station = await ChargingStation.findById(stationId).session(session);
-    if (!station) throw new Error("Station not found");
+  // 2. Insert directly without Mongo Replica Set Transactions
+  const booking = new Booking({
+    userId: userId,
+    stationId: stationId,
+    date,
+    timeSlots: [`${startTime} - ${endTime}`],
+    amount,
+    paymentStatus: "pending",
+    status: "booked",
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+  });
 
-    const timeSlots = generateTimeSlots(startTime, endTime);
-
-    // 🔥 SLOT LOCKING
-    for (const slot of timeSlots) {
-
-      const updatedSlot = await Slot.findOneAndUpdate(
-        {
-          stationId,
-          date,
-          timeSlot: slot,
-          bookedCount: { $lt: station.slotsPerHour }
-        },
-        {
-          $inc: { bookedCount: 1 }
-        },
-        {
-          new: true,
-          upsert: true,
-          session
-        }
-      );
-
-      if (!updatedSlot) {
-        throw new Error(`Slot ${slot} is full`);
-      }
-    }
-
-    // 🔥 DUPLICATE CHECK
-    const existing = await Booking.findOne({
-      userId,
-      stationId,
-      date,
-      timeSlots: { $in: timeSlots },
-      status: { $ne: "cancelled" }
-    }).session(session);
-
-    if (existing) {
-      throw new Error("You already booked these slots");
-    }
-
-    // 🔥 REAL PRICE CALCULATION
-    const amount = units * station.pricePerUnit;
-
-    const booking = await Booking.create([{
-      userId,
-      stationId,
-      date,
-      timeSlots,
-      status: "booked",
-      paymentStatus: "pending",
-      amount,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000)
-    }], { session });
-
-    await session.commitTransaction();
-    session.endSession();
-
-    return booking[0];
-
-  } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    throw error;
-  }
+  await booking.save();
+  return booking;
 };
 
-
-const cancelBooking = async (bookingId) => {
-
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-
-    const booking = await Booking.findById(bookingId).session(session);
-
-    if (!booking) throw new Error("Booking not found");
-
-    for (const slot of booking.timeSlots) {
-      await Slot.findOneAndUpdate(
-        {
-          stationId: booking.stationId,
-          date: booking.date,
-          timeSlot: slot
-        },
-        {
-          $inc: { bookedCount: -1 }
-        },
-        { session }
-      );
-    }
-
-    booking.status = "cancelled";
-    await booking.save({ session });
-
-    await session.commitTransaction();
-    session.endSession();
-
-  } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    throw error;
+const updateBookingStatus = async (orderId, paymentId, status) => {
+  const booking = await Booking.findOne({ razorpayOrderId: orderId });
+  
+  if (!booking) {
+    throw new Error("Booking securely logged but not found locally");
   }
+
+  booking.paymentStatus = status;
+  if (status === "Completed") {
+    booking.razorpayPaymentId = paymentId;
+    
+    // Auto-generate QR
+    const qrData = JSON.stringify({
+      bookingId: booking._id,
+      userId: booking.user,
+      stationId: booking.station,
+      units: booking.units
+    });
+    booking.qrCode = qrData;
+  } else {
+    booking.status = "Cancelled";
+  }
+
+  await booking.save();
+  return booking;
 };
 
-module.exports = { createBooking,cancelBooking };
+module.exports = { createBooking, updateBookingStatus };

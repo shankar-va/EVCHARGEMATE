@@ -3,24 +3,19 @@ const station = require('../../../models/chargingStation');
 const mongoStations = async (latitude, longitude, distance = 5) => {
 
   try {
+    const maxDistMeters = Math.max(1, Math.min(distance * 1000, 50000)); // clamp between 1m and 50km
 
-    const nearByStations = await station.aggregate([
-      {
-        $geoNear: {
-          near: {
+    const nearByStations = await station.find({
+      location: {
+        $near: {
+          $geometry: {
             type: "Point",
             coordinates: [Number(longitude), Number(latitude)]
           },
-          distanceField: "distance",
-          maxDistance: distance * 1000,
-          spherical: true,
-          key: "location"
+          $maxDistance: maxDistMeters
         }
-      },
-      {
-        $limit: 20
       }
-    ]);
+    }).limit(20);
 
     return nearByStations;
 

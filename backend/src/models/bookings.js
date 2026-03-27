@@ -7,8 +7,7 @@ const bookingSchema=new mongoose.Schema({
         required:true,
     },
     stationId:{
-        type:mongoose.Schema.Types.ObjectId,
-        ref:'chargingStation',
+        type:String,
         required:true
     },
     status:{

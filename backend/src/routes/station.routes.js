@@ -1,24 +1,24 @@
 const express = require("express");
 const router = express.Router();
 
-const { searchStations,searchStationById,getStationRoutes} = require("../controllers/station.controller");
-const {createStation,updateStations,deleteStations,getStation }=require('../controllers/admin.controller')
-const authenticate=require('../middleware/auth.middleware');
-const authorize=require('../validators/auth.validators');
+const { searchStations, searchStationById, getStationRoutes } = require("../controllers/station.controller");
+const { createStation, updateStations, deleteStations, getStation } = require('../controllers/admin.controller')
+const authenticate = require('../middleware/auth.middleware');
+const authorize = require('../validators/auth.validators');
 
-router.get("/user/search", authenticate,authorize('user'),searchStations);
+router.get("/user/search", authenticate, authorize('user'), searchStations);
 
-router.get('/user/search/',authenticate,authorize('user'),searchStationById);
+router.get('/user/search/', authenticate, authorize('user'), searchStationById);
 
-router.get('/user/search/route',authenticate,authorize('user'),getStationRoutes(20));
+router.get('/user/search/route', authenticate, authorize('user'), getStationRoutes(20));
 
-router.post('/admin/create',authenticate,authorize('admin'),createStation);
+router.post('/admin/create', authenticate, authorize('admin'), createStation);
 
-router.put('/admin/update',authenticate,authorize('admin'),updateStations);
+router.put('/admin/update', authenticate, authorize('admin'), updateStations);
 
-router.delete('/admin/delete',authenticate,authorize('admin'),deleteStations);
+router.delete('/admin/delete', authenticate, authorize('admin'), deleteStations);
 
-router.get('/admin/station/:id',authenticate,authorize('admin'),getStation);
+router.get('/admin/station/:id', authenticate, authorize('admin'), getStation);
 
 
 module.exports = router;

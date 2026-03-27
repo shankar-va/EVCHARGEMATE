@@ -33,7 +33,11 @@ app.use(cookieParser());
 
 app.use(passport.initialize());
 
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'], // Explicit origins needed for credentials
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true // Crucial for HTTP-Only cookie transfer
+}));
 
 mongodb();
 
