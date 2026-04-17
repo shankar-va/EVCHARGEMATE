@@ -2,9 +2,38 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { MapPin, Battery, Calendar, Zap, ArrowRight, ShieldCheck, Search, Navigation, Map as MapIcon } from 'lucide-react';
+import { MapPin, Battery, Calendar, Zap, ArrowRight, ShieldCheck, Search, Navigation, Map as MapIcon, Crosshair, Loader2 } from 'lucide-react';
 import RouteMap from '../../components/Map/RouteMap';
 import './Stations.css';
+
+const loadRazorpay = () => {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+
+    const scriptId = "razorpay-js-script";
+    let script = document.getElementById(scriptId);
+
+    if (script) {
+      // Script already injected but window.Razorpay not ready yet (or blocked)
+      script.addEventListener('load', () => resolve(true));
+      script.addEventListener('error', () => resolve(false));
+      return;
+    }
+
+    script = document.createElement("script");
+    script.id = scriptId;
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+
+    document.body.appendChild(script);
+  });
+};
 
 // Nominatim Geocoding API Backup
 const geocode = async (query) => {
@@ -57,7 +86,18 @@ const fetchRouteLine = async (src, dest) => {
   return [src, dest];
 };
 
-const AutocompleteInput = ({ label, icon: Icon, mapClickToggled, onToggleMapClick, currentCoords, onSelect, query, setQuery }) => {
+const AutocompleteInput = ({
+  label,
+  icon: Icon,
+  mapClickToggled,
+  onToggleMapClick,
+  currentCoords,
+  onSelect,
+  query,
+  setQuery,
+  onUseCurrentLocation,
+  useCurrentLocationLoading,
+}) => {
   const { suggestions, setSuggestions } = useNominatimAutocomplete(query);
   const [displayValue, setDisplayValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -114,8 +154,30 @@ const AutocompleteInput = ({ label, icon: Icon, mapClickToggled, onToggleMapClic
           onKeyDown={handleKeyDown}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-          style={{ paddingRight: '40px', background: 'transparent' }}
+          style={{ paddingRight: onUseCurrentLocation ? '90px' : '40px', background: 'transparent' }}
         />
+        {onUseCurrentLocation && (
+          <button
+            type="button"
+            title="Use Current Location"
+            onClick={(e) => {
+              e.preventDefault();
+              onUseCurrentLocation();
+            }}
+            disabled={useCurrentLocationLoading}
+            style={{
+              position: 'absolute',
+              right: '46px',
+              top: '12px',
+              background: 'transparent',
+              border: 'none',
+              color: useCurrentLocationLoading ? 'var(--text-secondary)' : 'var(--accent-neon-blue)',
+              cursor: useCurrentLocationLoading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {useCurrentLocationLoading ? <Loader2 size={18} className="spin" /> : <Crosshair size={20} />}
+          </button>
+        )}
         <button
           type="button"
           title="Pick from Map"
@@ -196,14 +258,74 @@ const Stations = () => {
   const [bookingEndTime, setBookingEndTime] = useState('11:00');
   const [bookingUnits, setBookingUnits] = useState(10);
   const [bookingLoading, setBookingLoading] = useState(false);
-  const { user } = useAuth();
+  const [bookingValidationError, setBookingValidationError] = useState('');
+
+  // Station details modal (covers: GET /api/stations/user/search/?externalStationId=...)
+  const [stationDetailsOpen, setStationDetailsOpen] = useState(false);
+  const [stationDetailsLoading, setStationDetailsLoading] = useState(false);
+  const [stationDetailsError, setStationDetailsError] = useState('');
+  const [stationDetailsData, setStationDetailsData] = useState(null);
+
+  // QR check-in modal (covers: POST /api/qr/scan)
+  const [qrCheckInOpen, setQrCheckInOpen] = useState(false);
+  const [paidBooking, setPaidBooking] = useState(null);
+  const [paidQrCode, setPaidQrCode] = useState(null);
+  const [qrCheckInLoading, setQrCheckInLoading] = useState(false);
+  const [qrCheckInError, setQrCheckInError] = useState('');
+  const [paymentVerified, setPaymentVerified] = useState(false);
+  const [checkInConfirmOpen, setCheckInConfirmOpen] = useState(false);
+  const [geoLoadingFor, setGeoLoadingFor] = useState(null); // 'source' | 'dest' | null
+  const [geoError, setGeoError] = useState('');
+  const { user, fetchUserData } = useAuth();
+
+  const getTodayISO = () => new Date().toISOString().split('T')[0];
+  const getNowHHMM = () => {
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
+
+  const isFutureSlot = (dateStr, startHHMM) => {
+    if (!dateStr || !startHHMM) return false;
+    const [h, m] = startHHMM.split(':').map(Number);
+    const dt = new Date(`${dateStr}T00:00:00`);
+    dt.setHours(h, m, 0, 0);
+    return dt.getTime() > Date.now();
+  };
 
   useEffect(() => {
     setLoading(true);
-    api.getStations()
-      .then(data => setStations(data.stations || data.data || []))
-      .catch()
-      .finally(() => setLoading(false));
+    setError('');
+
+    const load = async () => {
+      try {
+        if (!navigator.geolocation) {
+          setStations([]);
+          setError('Geolocation is not supported by your browser.');
+          return;
+        }
+
+        const pos = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 60000,
+          });
+        });
+
+        const { latitude, longitude } = pos.coords;
+        const res = await api.getStations(latitude, longitude, radius);
+        setStations(res.data || res.stations || []);
+      } catch (err) {
+        setStations([]);
+        setError(err.message || 'Unable to fetch your location. Please drop pins and calculate a route.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
   }, []);
 
   const handleRouteSearch = async (e) => {
@@ -275,6 +397,70 @@ const Stations = () => {
     setBookingDate(new Date().toISOString().split('T')[0]);
   };
 
+  const handleUseCurrentLocation = async (mode) => {
+    setGeoError('');
+    setGeoLoadingFor(mode);
+
+    try {
+      if (!navigator.geolocation) {
+        throw new Error('Geolocation is not supported by your browser.');
+      }
+
+      const pos = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 60000,
+        });
+      });
+
+      const { latitude, longitude } = pos.coords;
+      const coords = [latitude, longitude];
+
+      const pretty = `Current Location: [${latitude.toFixed(2)}, ${longitude.toFixed(2)}]`;
+
+      if (mode === 'source') {
+        setSrcCoords(coords);
+        setSrcQuery(pretty);
+      } else if (mode === 'dest') {
+        setDestCoords(coords);
+        setDestQuery(pretty);
+      }
+
+      setClickMode('none');
+    } catch (err) {
+      // Geolocation errors: 1=PermissionDenied, 2=PositionUnavailable, 3=Timeout
+      if (err?.code === 1) {
+        setGeoError('Location permission denied. Please enable location permissions and try again.');
+      } else {
+        setGeoError(err?.message || 'Unable to get current location. Please try again.');
+      }
+    } finally {
+      setGeoLoadingFor(null);
+    }
+  };
+
+  const handleStationDetails = async (station) => {
+    const stationId = station?.externalStationId || station?._id || station?.id;
+    if (!stationId) return;
+
+    setStationDetailsOpen(true);
+    setStationDetailsLoading(true);
+    setStationDetailsError('');
+    setStationDetailsData(null);
+
+    try {
+      const res = await api.getStationDetails(stationId);
+      const data = res.data || res.station || null;
+      const normalized = Array.isArray(data) ? data[0] : data;
+      setStationDetailsData(normalized || null);
+    } catch (err) {
+      setStationDetailsError(err.message || 'Failed to fetch station details.');
+    } finally {
+      setStationDetailsLoading(false);
+    }
+  };
+
   const handleMapPinClick = (station) => {
     const stationId = station._id || station.externalStationId || station.id;
     const stationIndex = stations.findIndex(s => (s._id || s.externalStationId || s.id) === stationId);
@@ -294,50 +480,114 @@ const Stations = () => {
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
-
   const handlePayment = async () => {
-    if (!bookingDate || !bookingStartTime || !bookingEndTime) return alert("Select all date and time parameters.");
-    setBookingLoading(true);
-    try {
-      const data = await api.createBooking({
-        stationId: selectedStation._id || selectedStation.externalStationId,
-        date: bookingDate,
-        startTime: bookingStartTime,
-        endTime: bookingEndTime,
-        units: bookingUnits
-      });
-      if (!data.order) throw new Error(data.message || "Booking creation failed.");
+  setBookingValidationError('');
 
-      const options = {
-        key: "rzp_test_SVQ4XAJ7F8kFzz",
-        amount: data.order.amount,
-        currency: "INR",
-        name: "EV-ChargeMate",
-        description: `Booking at ${selectedStation.companyName || selectedStation.name || 'EV Station'}`,
-        order_id: data.order.id,
-        handler: async function (response) {
-          try {
-            const verifyRes = await api.verifyPayment(response);
-            if (verifyRes.qrCode || verifyRes.booking?.qrCode || verifyRes.success) {
-              alert("Payment Successful! Slot verified completely.");
-              setSelectedStation(null);
-            }
-          } catch (err) {
-            alert("Payment verification failed.");
-          }
-        },
-        theme: { color: "#2563eb" } 
-      };
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function (response) { alert("Payment failed."); });
-      rzp.open();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setBookingLoading(false);
+  if (!bookingDate || !bookingStartTime || !bookingEndTime) {
+    setBookingValidationError('Please select date and time.');
+    return;
+  }
+
+  if (!isFutureSlot(bookingDate, bookingStartTime)) {
+    setBookingValidationError('Cannot select past time slots.');
+    return;
+  }
+
+  setBookingLoading(true);
+
+  try {
+    const scriptLoaded = await loadRazorpay();
+
+    if (!scriptLoaded) {
+      alert("Razorpay failed to load ❌");
+      return;
     }
-  };
 
+    const data = await api.createBooking({
+      stationId: selectedStation._id || selectedStation.externalStationId,
+      date: bookingDate,
+      startTime: bookingStartTime,
+      endTime: bookingEndTime,
+      units: bookingUnits
+    });
+
+    if (!data.order) throw new Error("Booking failed");
+
+    const options = {
+      key: "rzp_test_SVQ4XAJ7F8kFzz",
+      amount: data.order.amount,
+      currency: "INR",
+      name: "EV-ChargeMate",
+      description: "Booking Payment",
+      order_id: data.order.id,
+
+      handler: async function (response) {
+        const verifyRes = await api.verifyPayment(response);
+
+        if (!verifyRes.success) {
+          alert("Payment verification failed");
+          return;
+        }
+
+        setPaidBooking(verifyRes.booking);
+        setPaidQrCode(verifyRes.qrCode);
+        setPaymentVerified(true);
+        setQrCheckInOpen(true);
+        setSelectedStation(null);
+      }
+    };
+
+    const rzp = new window.Razorpay(options);
+    rzp.open();
+
+  } catch (err) {
+    console.error(err);
+    alert("Payment error");
+  } finally {
+    setBookingLoading(false);
+  }
+};
+  
+  const handleQrCheckIn = async () => {
+  if (!paidBooking?._id) {
+    setQrCheckInError('Missing booking');
+    return;
+  }
+
+  setQrCheckInLoading(true);
+  setQrCheckInError('');
+
+  try {
+    const stationId = localStorage.getItem("stationId");
+    const stationSecret = localStorage.getItem("stationSecret");
+
+    if (!stationId || !stationSecret) {
+      throw new Error("Station not initialized");
+    }
+
+    const res = await api.confirmQR({
+      bookingId: paidBooking._id,
+      stationId,
+      stationSecret
+    });
+
+    if (fetchUserData) {
+      await fetchUserData();
+    }
+
+    setQrCheckInOpen(false);
+    setPaidBooking(null);
+    setPaidQrCode(null);
+    setPaymentVerified(false);
+
+    alert(res.message || "Charging started");
+
+  } catch (err) {
+    setQrCheckInError(err.message || "Check-in failed");
+  } finally {
+    setQrCheckInLoading(false);
+  }
+};
   const totalPages = Math.ceil(stations.length / itemsPerPage);
   const paginatedStations = stations.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
@@ -357,6 +607,7 @@ const Stations = () => {
             allStations={stations}
             paginatedStations={paginatedStations}
             onStationClick={handleMapPinClick}
+            onStationDetails={handleStationDetails}
             clickMode={clickMode}
             onMapLocationSelect={handleMapSelection}
           />
@@ -380,6 +631,8 @@ const Stations = () => {
               onSelect={(coords) => setSrcCoords(coords)}
               query={srcQuery}
               setQuery={setSrcQuery}
+              onUseCurrentLocation={() => handleUseCurrentLocation('source')}
+              useCurrentLocationLoading={geoLoadingFor === 'source'}
             />
             <AutocompleteInput
               label="Destination Point"
@@ -390,6 +643,8 @@ const Stations = () => {
               onSelect={(coords) => setDestCoords(coords)}
               query={destQuery}
               setQuery={setDestQuery}
+              onUseCurrentLocation={() => handleUseCurrentLocation('dest')}
+              useCurrentLocationLoading={geoLoadingFor === 'dest'}
             />
 
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -421,13 +676,23 @@ const Stations = () => {
             </button>
           </form>
 
-          {error && <p className="error-text" style={{ marginTop: '1rem', color: 'var(--danger)' }}>{error}</p>}
+          {geoError && <p className="error-text" style={{ marginTop: '1rem', color: 'var(--danger)' }}>{geoError}</p>}
+          {error && <p className="error-text" style={{ marginTop: geoError ? '0.5rem' : '1rem', color: 'var(--danger)' }}>{error}</p>}
         </div>
 
         <div className="station-results-container">
           <h4 style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '1.2rem', fontWeight: 600 }}>
-            {stations.length > 0 ? `${stations.length} Map Waypoints Found` : 'No stations in this area.'}
+            {loading && stations.length === 0
+              ? 'Loading stations...'
+              : stations.length > 0
+                ? `${stations.length} Map Waypoints Found`
+                : 'No stations in this area.'}
           </h4>
+          {loading && stations.length === 0 && (
+            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '24px 0' }}>
+              Please wait while we load nearby charging stations.
+            </div>
+          )}
           <div className="stations-mini-stack">
             {paginatedStations.map((st, i) => (
               <div key={st._id || st.externalStationId || i} id={`station-${st._id || st.externalStationId || st.id}`} className="station-detail-card">
@@ -515,17 +780,52 @@ const Stations = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '20px' }}>
               <div className="input-group" style={{ flexDirection: 'column', alignItems: 'flex-start', background: 'transparent', border: 'none' }}>
                 <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Reservation Date</label>
-                <input type="date" value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)' }} />
+                <input
+                  type="date"
+                  value={bookingDate}
+                  min={getTodayISO()}
+                  onChange={(e) => {
+                    setBookingDate(e.target.value);
+                    setBookingValidationError('');
+                    // If user switches to today and start time is in the past, auto-bump to now
+                    if (e.target.value === getTodayISO() && bookingStartTime < getNowHHMM()) {
+                      setBookingStartTime(getNowHHMM());
+                    }
+                  }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
+                />
               </div>
 
               <div style={{ display: 'flex', gap: '10px' }}>
                 <div className="input-group" style={{ flexDirection: 'column', alignItems: 'flex-start', flex: 1, background: 'transparent', border: 'none' }}>
                   <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Start Time</label>
-                  <input type="time" value={bookingStartTime} onChange={(e) => setBookingStartTime(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)' }} />
+                  <input
+                    type="time"
+                    value={bookingStartTime}
+                    min={bookingDate === getTodayISO() ? getNowHHMM() : undefined}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setBookingStartTime(v);
+                      setBookingValidationError('');
+                      if (bookingDate === getTodayISO() && v < getNowHHMM()) {
+                        setBookingValidationError('Cannot select past time slots.');
+                      }
+                    }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
+                  />
                 </div>
                 <div className="input-group" style={{ flexDirection: 'column', alignItems: 'flex-start', flex: 1, background: 'transparent', border: 'none' }}>
                   <label style={{ fontSize: '13px', fontWeight: 'bold' }}>End Time</label>
-                  <input type="time" value={bookingEndTime} onChange={(e) => setBookingEndTime(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)' }} />
+                  <input
+                    type="time"
+                    value={bookingEndTime}
+                    min={bookingStartTime || (bookingDate === getTodayISO() ? getNowHHMM() : undefined)}
+                    onChange={(e) => {
+                      setBookingEndTime(e.target.value);
+                      setBookingValidationError('');
+                    }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
+                  />
                 </div>
               </div>
 
@@ -534,6 +834,12 @@ const Stations = () => {
                 <input type="number" value={bookingUnits} onChange={(e) => setBookingUnits(Number(e.target.value))} min="1" style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)' }} />
               </div>
             </div>
+
+            {bookingValidationError && (
+              <p style={{ marginBottom: 14, color: 'var(--danger)', fontWeight: 800 }}>
+                {bookingValidationError}
+              </p>
+            )}
 
             <div className="modal-actions" style={{ display: 'flex', gap: '15px' }}>
               <button 
@@ -551,6 +857,164 @@ const Stations = () => {
                 style={{ flex: 2, background: 'var(--accent-neon-blue)', color: 'white' }}
               >
                 {bookingLoading ? 'Processing Request...' : 'Proceed To Checkout'} <ArrowRight size={18} />
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Station details modal */}
+      {stationDetailsOpen && (
+        <div
+          className="modal-overlay"
+          onClick={(e) => {
+            if (e.target.className === 'modal-overlay') {
+              setStationDetailsOpen(false);
+              setStationDetailsData(null);
+              setStationDetailsError('');
+            }
+          }}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="booking-modal glass-panel"
+          >
+            <h2 style={{ color: 'var(--text-primary)', marginBottom: '10px' }}>Station Details</h2>
+
+            {stationDetailsLoading ? (
+              <p style={{ color: 'var(--text-secondary)' }}>Loading station...</p>
+            ) : stationDetailsError ? (
+              <p style={{ color: 'var(--danger)', fontWeight: 700 }}>{stationDetailsError}</p>
+            ) : stationDetailsData ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    {stationDetailsData.companyName || stationDetailsData.name || 'EV Hub'}
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)', marginTop: 4, fontSize: 13 }}>
+                    {stationDetailsData.address || 'Location Details N/A'}
+                  </div>
+                </div>
+
+                <div className="station-detail-grid" style={{ marginBottom: 0, padding: 0 }}>
+                  <div className="detail-item">
+                    <span className="detail-label">Operator</span>
+                    <span className="detail-value">{stationDetailsData.operator || '-'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">Power (kW)</span>
+                    <span className="detail-value">{stationDetailsData.powerKW ? `${stationDetailsData.powerKW} kW` : '-'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">Rating</span>
+                    <span className="detail-value">{stationDetailsData.rating ? `⭐ ${stationDetailsData.rating}/5` : '-'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">Price (₹/kWh)</span>
+                    <span className="detail-value">{stationDetailsData.pricePerUnit ?? '-'}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="detail-label" style={{ marginBottom: 8 }}>Connectors</div>
+                  <div>
+                    {(stationDetailsData.connectors || []).length > 0 ? (
+                      stationDetailsData.connectors.map((c, idx) => (
+                        <span key={`${c}-${idx}`} className="connector-chip">{c}</span>
+                      ))
+                    ) : (
+                      <span className="connector-chip">Standard</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-secondary)' }}>No station details found.</p>
+            )}
+
+            <div className="modal-actions" style={{ marginTop: 18 }}>
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setStationDetailsOpen(false);
+                  setStationDetailsData(null);
+                  setStationDetailsError('');
+                }}
+                disabled={stationDetailsLoading}
+                style={{ flex: 1 }}
+              >
+                Close
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Cryptographic Payment Confirmation UI */}
+      {qrCheckInOpen && (
+        <div
+          className="modal-overlay"
+          onClick={(e) => {
+            if (e.target.className === 'modal-overlay') {
+              setQrCheckInOpen(false);
+              setPaidBooking(null);
+              setPaidQrCode(null);
+              setQrCheckInError('');
+              setPaymentVerified(false);
+            }
+          }}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="booking-modal glass-panel"
+            style={{ maxWidth: 600, textAlign: 'center' }}
+          >
+            <h2 style={{ color: 'var(--text-primary)', marginBottom: '10px' }}>Cryptographic Access Token</h2>
+            <p className="modal-desc" style={{ marginBottom: 16 }}>
+              Payment successfully validated. Hand over this AES-encrypted payload to the Station Operator exclusively.
+            </p>
+            <p style={{ color: 'var(--text-secondary)', fontWeight: 700, marginTop: -6, marginBottom: 14 }}>
+              {paymentVerified ? 'Booking Confirmed Securely' : 'Payment pending'}
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
+              {paidQrCode ? (
+                <img
+                  src={paidQrCode}
+                  alt="QR Code"
+                  style={{ width: 350, height: 350, borderRadius: 14, background: 'white', padding: 8, objectFit: 'contain' }}
+                />
+              ) : (
+                <div className="qr-placeholder" style={{ height: 350, width: 350 }}>
+                  <p style={{ color: 'var(--text-secondary)', fontWeight: 700 }}>QR not available</p>
+                </div>
+              )}
+
+              {paidBooking && (
+                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '8px', width: '100%', textAlign: 'left' }}>
+                  <p><b>Station Operator:</b> {paidBooking.companyName || paidBooking.stationId || '-'}</p>
+                  <p><b>Reservation Date:</b> {paidBooking.date || '-'}</p>
+                  <p><b>Global Ledger Key:</b> {paidBooking._id || '-'}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'center', marginTop: '25px', borderTop: '1px solid var(--glass-border)', paddingTop: '20px' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setQrCheckInOpen(false);
+                  setPaidBooking(null);
+                  setPaidQrCode(null);
+                  setQrCheckInError('');
+                  setPaymentVerified(false);
+                }}
+                disabled={qrCheckInLoading}
+                style={{ minWidth: '200px' }}
+              >
+                Close / Return 
               </button>
             </div>
           </motion.div>

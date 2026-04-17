@@ -1,5 +1,6 @@
 const Booking = require("../models/bookings");
 const Slot = require("../models/slot");
+const mongoose = require("mongoose");
 
 const expireBookings = async () => {
   try {
@@ -12,25 +13,47 @@ const expireBookings = async () => {
 
     for (const booking of expiredBookings) {
 
-      // 🔥 RELEASE SLOTS
-      for (const slot of booking.timeSlots) {
-        await Slot.findOneAndUpdate(
-          {
-            stationId: booking.stationId,
-            date: booking.date,
-            timeSlot: slot
-          },
-          {
-            $inc: { bookedCount: -1 }
-          }
-        );
+      // 🔥 ONLY update slots for INTERNAL stations
+      if (mongoose.Types.ObjectId.isValid(booking.stationId)) {
+
+        for (const slot of booking.timeSlots) {
+          await Slot.findOneAndUpdate(
+            {
+              stationId: booking.stationId,
+              date: booking.date,
+              timeSlot: slot
+            },
+            {
+              $inc: { bookedCount: -1 }
+            }
+          );
+        }
+
+      } else {
+        // ✅ External station → skip safely
+        console.log("⚠️ Skipping slot release for external station:", booking.stationId);
       }
 
       booking.status = "cancelled";
       await booking.save();
     }
 
-    console.log(`Expired ${expiredBookings.length} bookings`);
+    // 🔥 COMPLETE ACTIVE SESSIONS
+    const activeUpdateResult = await Booking.updateMany(
+      {
+        status: "active",
+        expiresAt: { $lt: now }
+      },
+      {
+        $set: { status: "completed" }
+      }
+    );
+
+    if (expiredBookings.length > 0 || activeUpdateResult.modifiedCount > 0) {
+      console.log(
+        `Cron Sweep: Cancelled ${expiredBookings.length} unpaid | Completed ${activeUpdateResult.modifiedCount} active sessions`
+      );
+    }
 
   } catch (err) {
     console.error("CRON ERROR:", err);

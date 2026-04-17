@@ -10,10 +10,21 @@ const createBooking = async (bookingData) => {
   // 1. Calculate amount
   const amount = units * UNIT_PRICE;
 
+  // Resolve True Database ObjectId dynamically seamlessly
+  const query = [{ externalStationId: String(stationId) }];
+  if (mongoose.Types.ObjectId.isValid(stationId)) {
+    query.push({ _id: stationId });
+  }
+
+  const station = await ChargingStation.findOne({ $or: query });
+  if (!station) {
+    throw new Error("Target Station not mapped to Global Ledger correctly.");
+  }
+
   // 2. Insert directly without Mongo Replica Set Transactions
   const booking = new Booking({
     userId: userId,
-    stationId: stationId,
+    stationId: station._id, // 🔥 Forces Pure MongoDB Schema Isolation
     date,
     timeSlots: [`${startTime} - ${endTime}`],
     amount,

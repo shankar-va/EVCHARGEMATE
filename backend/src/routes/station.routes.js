@@ -3,8 +3,8 @@ const router = express.Router();
 
 const { searchStations, searchStationById, getStationRoutes } = require("../controllers/station.controller");
 const { createStation, updateStations, deleteStations, getStation } = require('../controllers/admin.controller')
-const authenticate = require('../middleware/auth.middleware');
-const authorize = require('../validators/auth.validators');
+const {authenticate,authorize} = require('../middleware/auth.middleware');
+
 
 router.get("/user/search", authenticate, authorize('user'), searchStations);
 

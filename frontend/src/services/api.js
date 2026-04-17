@@ -1,28 +1,54 @@
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace(/\/$/, '');
 
-// Helper function to handle fetch responses and extract JSON data or errors
+/**
+ * HANDLE RESPONSE SAFELY
+ */
 const handleResponse = async (response) => {
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.message || 'Something went wrong. Please try again later.');
+  const contentType = response.headers.get("content-type");
+  let data = {};
+
+  try {
+    if (contentType && contentType.includes("application/json")) {
+      data = await response.json();
+    } else {
+      data = { message: await response.text() };
+    }
+  } catch (e) {
+    data = { message: "Internal server payload failure" };
   }
-  return data;
+
+  if (!response.ok) {
+    throw new Error(data.message || "Something went wrong");
+  }
+
+  if (data && data.success !== undefined) {
+    return data;
+  }
+
+  return { success: true, data };
 };
 
-// Config for sending JSON payloads securely with cookies
-const getJsonHeaders = () => {
-  return {
-    'Content-Type': 'application/json'
-  };
+const baseFetchOptions = {
+  credentials: "include",
+  cache: "no-store",
 };
 
+const getJsonHeaders = () => ({
+  "Content-Type": "application/json",
+});
+
+/**
+ * MAIN API OBJECT
+ */
 export const api = {
-  // --- AUTH ROUTES ---
+
+  // ================= AUTH =================
+
   login: async (credentials) => {
     const res = await fetch(`${API_BASE_URL}/user/login`, {
-      method: 'POST',
+      method: "POST",
       headers: getJsonHeaders(),
-      credentials: 'include', // vital for receiving HttpOnly cookie
+      ...baseFetchOptions,
       body: JSON.stringify(credentials),
     });
     return handleResponse(res);
@@ -30,9 +56,9 @@ export const api = {
 
   register: async (userData) => {
     const res = await fetch(`${API_BASE_URL}/user/register`, {
-      method: 'POST',
+      method: "POST",
       headers: getJsonHeaders(),
-      credentials: 'include',
+      ...baseFetchOptions,
       body: JSON.stringify(userData),
     });
     return handleResponse(res);
@@ -40,51 +66,64 @@ export const api = {
 
   getSession: async () => {
     const res = await fetch(`${API_BASE_URL}/user/session`, {
-      method: 'GET',
+      method: "GET",
       headers: getJsonHeaders(),
-      credentials: 'include', // vital for reading HttpOnly Google OAuth cookie
+      ...baseFetchOptions,
     });
     return handleResponse(res);
   },
+
   logout: async () => {
-    // A secure system would call a backend endpoint to clear the HttpOnly cookie.
-    // Assuming backend clear doesn't exist yet, we just remove client state.
-    // If you add a `/user/logout` route later, call it here.
     return { success: true };
   },
 
-  // --- STATION ROUTES ---
+  // ================= ADMIN AUTH =================
+
+  adminLogin: async (credentials) => {
+    const res = await fetch(`${API_BASE_URL}/admin/login`, {
+      method: "POST",
+      headers: getJsonHeaders(),
+      ...baseFetchOptions,
+      body: JSON.stringify(credentials),
+    });
+    return handleResponse(res);
+  },
+
+  adminRegister: async (data) => {
+    const res = await fetch(`${API_BASE_URL}/admin/register`, {
+      method: "POST",
+      headers: getJsonHeaders(),
+      ...baseFetchOptions,
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  // ================= STATIONS =================
+
   getStations: async (lat, lng, radius) => {
-    // using the valid user/search route defined in backend
     let url = `${API_BASE_URL}/stations/user/search`;
+
     if (lat && lng) {
       url += `?latitude=${lat}&longitude=${lng}&radius=${radius || 50}`;
     }
+
     const res = await fetch(url, {
-      method: 'GET',
+      method: "GET",
       headers: getJsonHeaders(),
-      credentials: 'include',
+      ...baseFetchOptions,
     });
+
     return handleResponse(res);
   },
 
   getStationRoutes: async (srcLat, srcLng, destLat, destLng, radius = 50, limit = 50) => {
-    console.log("🚀 FRONTEND REQUEST:", {
-      srcLat, srcLng, destLat, destLng, radius, limit
-    });
-    if (
-      srcLat === undefined || srcLng === undefined ||
-      destLat === undefined || destLng === undefined
-    ) {
-      throw new Error("Invalid coordinates from frontend");
-    }
-
     const res = await fetch(
       `${API_BASE_URL}/stations/user/search/route?srclatitude=${srcLat}&srclongitude=${srcLng}&destlatitude=${destLat}&destlongitude=${destLng}&radius=${radius}&limit=${limit}`,
       {
-        method: 'GET',
+        method: "GET",
         headers: getJsonHeaders(),
-        credentials: 'include'
+        ...baseFetchOptions,
       }
     );
 
@@ -92,42 +131,172 @@ export const api = {
   },
 
   getStationDetails: async (stationId) => {
-    const res = await fetch(`${API_BASE_URL}/stations/user/search/?externalStationId=${stationId}`, {
-      method: 'GET',
-      headers: getJsonHeaders(),
-      credentials: 'include',
-    });
+    const res = await fetch(
+      `${API_BASE_URL}/stations/user/search/?externalStationId=${stationId}`,
+      {
+        method: "GET",
+        headers: getJsonHeaders(),
+        ...baseFetchOptions,
+      }
+    );
+
     return handleResponse(res);
   },
 
-  // --- BOOKING ROUTES ---
-  createBooking: async (bookingData) => {
-    const res = await fetch(`${API_BASE_URL}/booking/book`, {
-      method: 'POST',
+  // ================= ADMIN STATIONS =================
+
+  adminCreateStation: async (data) => {
+    const res = await fetch(`${API_BASE_URL}/admin/stations`, {
+      method: "POST",
       headers: getJsonHeaders(),
-      credentials: 'include',
-      body: JSON.stringify(bookingData),
+      ...baseFetchOptions,
+      body: JSON.stringify(data),
     });
+
+    return handleResponse(res);
+  },
+
+  adminUpdateStation: async (payload) => {
+    const res = await fetch(`${API_BASE_URL}/admin/stations/${payload.id || ''}`, {
+      method: "PUT",
+      headers: getJsonHeaders(),
+      ...baseFetchOptions,
+      body: JSON.stringify(payload),
+    });
+
+    return handleResponse(res);
+  },
+
+  adminDeleteStation: async (externalStationId) => {
+    const res = await fetch(`${API_BASE_URL}/admin/stations/ext`, {
+      method: "DELETE",
+      headers: getJsonHeaders(),
+      ...baseFetchOptions,
+      body: JSON.stringify({ externalStationId }),
+    });
+
+    return handleResponse(res);
+  },
+
+  adminGetStation: async (id) => {
+    const res = await fetch(`${API_BASE_URL}/admin/stations/${id}`, {
+      method: "GET",
+      headers: getJsonHeaders(),
+      ...baseFetchOptions,
+    });
+
+    return handleResponse(res);
+  },
+
+  adminGetAllStations: async () => {
+    const res = await fetch(`${API_BASE_URL}/admin/stations`, {
+      method: "GET",
+      headers: getJsonHeaders(),
+      ...baseFetchOptions,
+    });
+
+    return handleResponse(res);
+  },
+
+  adminGetBookings: async () => {
+    const res = await fetch(`${API_BASE_URL}/admin/bookings`, {
+      method: "GET",
+      headers: getJsonHeaders(),
+      ...baseFetchOptions,
+    });
+
+    return handleResponse(res);
+  },
+
+  adminGetAnalytics: async () => {
+    const res = await fetch(`${API_BASE_URL}/admin/analytics`, {
+      method: "GET",
+      headers: getJsonHeaders(),
+      ...baseFetchOptions,
+    });
+
+    return handleResponse(res);
+  },
+
+  // ================= BOOKINGS =================
+
+  createBooking: async (data) => {
+    const res = await fetch(`${API_BASE_URL}/booking/book`, {
+      method: "POST",
+      headers: getJsonHeaders(),
+      ...baseFetchOptions,
+      body: JSON.stringify(data),
+    });
+
     return handleResponse(res);
   },
 
   getUserBookings: async () => {
     const res = await fetch(`${API_BASE_URL}/booking/my-bookings`, {
-      method: 'GET',
+      method: "GET",
       headers: getJsonHeaders(),
-      credentials: 'include',
+      ...baseFetchOptions,
     });
+
     return handleResponse(res);
   },
 
-  // --- PAYMENT ROUTES ---
+  cancelBooking: async (bookingId) => {
+    const res = await fetch(`${API_BASE_URL}/booking/cancel`, {
+      method: "PATCH",
+      headers: getJsonHeaders(),
+      ...baseFetchOptions,
+      body: JSON.stringify({ bookingId }),
+    });
+
+    return handleResponse(res);
+  },
+
+  // ================= PAYMENT =================
+
   verifyPayment: async (paymentData) => {
     const res = await fetch(`${API_BASE_URL}/payment/verify`, {
-      method: 'POST',
+      method: "POST",
       headers: getJsonHeaders(),
-      credentials: 'include',
+      ...baseFetchOptions,
       body: JSON.stringify(paymentData),
     });
+
+    return handleResponse(res);
+  },
+
+  // ================= QR / STATION =================
+
+  bootStation: async (payload) => {
+    const res = await fetch(`${API_BASE_URL}/qr/boot`, {
+      method: "POST",
+      headers: getJsonHeaders(),
+      ...baseFetchOptions,
+      body: JSON.stringify(payload),
+    });
+
+    return handleResponse(res);
+  },
+
+  confirmQR: async (payload) => {
+    const res = await fetch(`${API_BASE_URL}/qr/confirm`, {
+      method: "POST",
+      headers: getJsonHeaders(),
+      ...baseFetchOptions,
+      body: JSON.stringify(payload),
+    });
+
+    return handleResponse(res);
+  },
+
+  cancelQRByStation: async (payload) => {
+    const res = await fetch(`${API_BASE_URL}/qr/cancel`, {
+      method: "POST",
+      headers: getJsonHeaders(),
+      ...baseFetchOptions,
+      body: JSON.stringify(payload),
+    });
+
     return handleResponse(res);
   }
 };

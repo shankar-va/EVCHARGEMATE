@@ -144,12 +144,12 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 20px;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .feature-card:hover {
-  border-color: rgba(0, 0, 0, 0.3);
-  background: rgba(24, 24, 27, 0.8);
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.08);
 }
 
 .feature-icon {

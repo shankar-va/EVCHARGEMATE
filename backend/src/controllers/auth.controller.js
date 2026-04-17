@@ -1,103 +1,158 @@
-const generateToken = require('../utils/generateToken')
+const generateToken = require('../utils/generateToken');
 const bcrypt = require('bcrypt');
 
-const userModel = require('../models/user')
-const adminModel = require('../models/admin')
+const userModel = require('../models/user');
+const adminModel = require('../models/admin');
 
+/**
+ * REGISTER (role-based)
+ */
 const register = (role) => async (req, res) => {
-    try {
-        const { username, email, password } = req.body;
-        const targetModel = (role !== 'admin' ? userModel : adminModel)
-        const userExist = await targetModel.findOne({ $or: [{ username }, { email }] });
-        if (userExist) {
-            return res.status(401).json({
-                success: false,
-                message: `${role} Already Exists with same credentials`,
-                data: userExist
-            })
-        }
+  try {
+    const { username, email, password } = req.body;
 
-        const salt = await bcrypt.genSalt(12);
+    const targetModel = role === 'admin' ? adminModel : userModel;
 
-        req.body.password = await bcrypt.hash(password, salt);
+    const existing = await targetModel.findOne({
+      $or: [{ username }, { email }]
+    });
 
-        const newUser = await targetModel.create(req.body);
-        res.status(201).json({
-            success: true,
-            message: `${role} created successfully`,
-            data: newUser
-        })
-
-    } catch (error) {
-
-        return res.status(400).json({
-            success: false,
-            message: `Cannot register ${role}`,
-            data: error.message
-        })
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: `${role} already exists`
+      });
     }
-}
 
-const login = (role) => async (req, res) => {
-    try {
-        const { username, email, password } = req.body;
-        const targetModel = (role !== 'admin' ? userModel : adminModel)
-        const userExist = await targetModel.findOne({ $or: [{ username }, { email }] });
-        if (!userExist) {
-            return res.status(401).json({
-                success: false,
-                message: `${role} does not exist`
-            })
-        }
-        const userId = userExist._id;
-        const isMatch = await bcrypt.compare(password, userExist.password);
-        if (!isMatch) {
-            return res.status(401).json({
-                success: false,
-                message: `Invalid credentials`,
-            })
-        }
-        const accessToken = await generateToken(userExist._id, userExist.username);
+    const salt = await bcrypt.genSalt(12);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-        res.cookie("accessToken", accessToken, {
-            maxAge: 1000 * 24 * 60 * 60,
-            sameSite: 'strict',
-            httpOnly: true
-        })
+    const newUser = await targetModel.create({
+      username,
+      email,
+      password: hashedPassword,
+      role
+    });
 
-        // Strip out the password
-        const userObj = userExist.toObject();
-        delete userObj.password;
+    const userObj = newUser.toObject();
+    delete userObj.password;
 
-        res.status(200).json({
-            success: true,
-            message: `${role} Logged In successfully`,
-            data: userObj
-        })
-    } catch (error) {
+    res.status(201).json({
+      success: true,
+      message: `${role} registered successfully`,
+      data: userObj
+    });
 
-        return res.status(400).json({
-            success: false,
-            message: `Cannot login ${role}`,
-            data: error.message
-        })
-    }
-}
-
-const getSession = async (req, res) => {
-    try {
-        const user = await userModel.findById(req.user.userId).select("-password -__v -createdAt -updatedAt");
-        if (!user) {
-            return res.status(400).json({ success: false, message: "No active user session" });
-        }
-        return res.status(200).json({ success: true, data: user });
-    } catch (error) {
-        return res.status(500).json({ success: false, message: "Internal server error" });
-    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: `Registration failed`,
+      error: error.message
+    });
+  }
 };
 
+
+/**
+ * LOGIN (role-based)
+ */
+const login = (role) => async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+
+    const targetModel = role === 'admin' ? adminModel : userModel;
+
+    const user = await targetModel.findOne({
+      $or: [{ username }, { email }]
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: `${role} not found`
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: `Invalid credentials`
+      });
+    }
+
+    // 🔥 INCLUDE ROLE IN TOKEN
+    const token = generateToken(user._id, user.username, role);
+
+    res.cookie("accessToken", token, {
+      httpOnly: true,
+      sameSite: "strict",
+      maxAge: 1000 * 60 * 60 * 24
+    });
+
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    res.status(200).json({
+      success: true,
+      message: `${role} login successful`,
+      data: userObj,
+      role
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: `Login failed`,
+      error: error.message
+    });
+  }
+};
+
+
+/**
+ * GET SESSION (ROLE-AWARE)
+ */
+const getSession = async (req, res) => {
+  try {
+    const { userId, role } = req.user;
+
+    let user;
+
+    if (role === 'admin') {
+      user = await adminModel.findById(userId);
+    } else {
+      user = await userModel.findById(userId);
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Session not found"
+      });
+    }
+
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    res.status(200).json({
+      success: true,
+      data: userObj,
+      role
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};
+
+
 module.exports = {
-    register,
-    login,
-    getSession
-}
+  register,
+  login,
+  getSession
+};

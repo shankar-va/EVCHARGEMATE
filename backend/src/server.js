@@ -18,8 +18,8 @@ const paymentRoutes=require('./routes/payment.routes')
 
 const mongodb=require('./database/mongodb');
 
-const authRoutes=require('./routes/auth.routes');
-
+const authRoutes=require('./routes/user.routes');
+const adminRoutes=require('./routes/admin.routes');
 const { expireBookings } = require("./utils/cronJobs");
 
 
@@ -34,9 +34,8 @@ app.use(cookieParser());
 app.use(passport.initialize());
 
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'], // Explicit origins needed for credentials
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true // Crucial for HTTP-Only cookie transfer
+    origin: "http://localhost:5173",
+    credentials: true
 }));
 
 mongodb();
@@ -50,6 +49,8 @@ app.use("/api/booking",bookingRoutes);
 app.use("/api/payment",paymentRoutes);
 
 app.use("/api/qr", require("./routes/qr.routes"));
+
+app.use("/api/admin", adminRoutes);
 
 app.use(errorHandler);
 

@@ -1,11 +1,14 @@
 const express = require("express");
-const authenticate=require('../middleware/auth.middleware');
-const authorize=require('../validators/auth.validators');
+const {authenticate,authorize}=require('../middleware/auth.middleware');
 
 const router = express.Router();
 
-const { bookAndCreateOrder } = require("../controllers/booking.controller");
+const { bookAndCreateOrder,cancelBooking,bookings } = require("../controllers/booking.controller");
 
 router.post("/book",authenticate,authorize('user'),bookAndCreateOrder);
+
+router.get("/my-bookings",authenticate,authorize('user'),bookings);
+
+router.patch("/cancel",authenticate,authorize('user'),cancelBooking);
 
 module.exports = router;

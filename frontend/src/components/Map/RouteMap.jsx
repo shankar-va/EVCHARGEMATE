@@ -106,7 +106,7 @@ const getClosestPoint = (lat, lng, routePoints) => {
   return closest;
 };
 
-const RouteMap = ({ srcCoords, destCoords, routePoints, allStations, paginatedStations, onStationClick, clickMode, onMapLocationSelect }) => {
+const RouteMap = ({ srcCoords, destCoords, routePoints, allStations, paginatedStations, onStationClick, onStationDetails, clickMode, onMapLocationSelect }) => {
   const [subRoutes, setSubRoutes] = useState({}); // mapped by station ID
 
   // Autocalculate OSRM Sub-routes strictly for paginated stations to secure API limits
@@ -210,7 +210,16 @@ const RouteMap = ({ srcCoords, destCoords, routePoints, allStations, paginatedSt
                 <div style={{ color: '#000', fontWeight: 'bold' }}>
                   {station.companyName || station.name || 'Charging Station'}
                   <br />
-                  <button onClick={() => onStationClick && onStationClick(station)} style={{ marginTop: '5px', padding: '4px 8px', background: 'var(--accent-neon-blue)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>View Details</button>
+                  <button
+                    onClick={() => {
+                      if (onStationDetails) onStationDetails(station);
+                      if (!onStationDetails && onStationClick) onStationClick(station);
+                      if (onStationDetails && onStationClick) onStationClick(station);
+                    }}
+                    style={{ marginTop: '5px', padding: '4px 8px', background: 'var(--accent-neon-blue)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                  >
+                    View Details
+                  </button>
                 </div>
               </Popup>
             </Marker>

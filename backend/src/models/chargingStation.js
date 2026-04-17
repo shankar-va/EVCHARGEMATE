@@ -10,6 +10,10 @@ const chargingStationSchema=new mongoose.Schema({
         type:String,
         required:true
     },
+    stationSecret:{
+        type:String,
+        required:true
+    },
 
     companyName:{
         type:String,

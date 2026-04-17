@@ -1,16 +1,11 @@
-const jwt=require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 
-const accessToken=async(userId,username)=>{
-    try{
-        token=await jwt.sign({userId,username},process.env.JWT_SECRET,{
-            expiresIn:'1d'
-    })
-    return token;
-}
-    catch(error){
-        throw error;
-    }
+const generateToken = (userId, username, role) => {
+  return jwt.sign(
+    { userId, username, role: role || "user" },
+    process.env.JWT_SECRET,
+    { expiresIn: "1d" }
+  );
+};
 
-}
-
-module.exports=accessToken
+module.exports = generateToken;

@@ -8,17 +8,20 @@ import './Auth.css';
 const Auth = () => {
   const [searchParams] = useSearchParams();
   const initialMode = searchParams.get('mode') === 'register' ? 'register' : 'login';
+  const initialRole = searchParams.get('role') === 'admin' ? 'admin' : 'user';
   const [isLogin, setIsLogin] = useState(initialMode === 'login');
+  const [role, setRole] = useState(initialRole);
   
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { login, register } = useAuth();
+  const { login, register, adminLogin, adminRegister } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     setIsLogin(searchParams.get('mode') !== 'register');
+    setRole(searchParams.get('role') === 'admin' ? 'admin' : 'user');
   }, [searchParams]);
 
   const handleChange = (e) => {
@@ -30,20 +33,39 @@ const Auth = () => {
     setError('');
     setLoading(true);
 
-    if (isLogin) {
-      const res = await login({ email: formData.email, password: formData.password });
-      if (res.success) {
-        navigate('/dashboard');
+    if (role === 'admin') {
+      if (isLogin) {
+        const res = await adminLogin({ email: formData.email, password: formData.password });
+        if (res.success) {
+          navigate('/admin/dashboard');
+        } else {
+          setError(res.message);
+        }
       } else {
-        setError(res.message);
+        const res = await adminRegister({ username: formData.name, email: formData.email, password: formData.password });
+        if (res.success) {
+          setIsLogin(true);
+          setError('Admin created successfully! Please login.');
+        } else {
+          setError(res.message);
+        }
       }
     } else {
-      const res = await register({ username: formData.name, email: formData.email, password: formData.password });
-      if (res.success) {
-        setIsLogin(true); // switch to login after successful registration
-        setError('Registration successful! Please login.');
+      if (isLogin) {
+        const res = await login({ email: formData.email, password: formData.password });
+        if (res.success) {
+          navigate('/dashboard');
+        } else {
+          setError(res.message);
+        }
       } else {
-        setError(res.message);
+        const res = await register({ username: formData.name, email: formData.email, password: formData.password });
+        if (res.success) {
+          setIsLogin(true); // switch to login after successful registration
+          setError('Registration successful! Please login.');
+        } else {
+          setError(res.message);
+        }
       }
     }
     setLoading(false);
@@ -61,8 +83,16 @@ const Auth = () => {
       >
         <div className="auth-header">
           <Zap size={40} className="auth-logo" />
-          <h2>{isLogin ? 'Welcome Back' : 'Join EV-ChargeMate'}</h2>
-          <p>{isLogin ? 'Power up your journey.' : 'Create an account to start charging.'}</p>
+          <h2>
+            {role === 'admin'
+              ? (isLogin ? 'Admin Portal' : 'Create Admin Account')
+              : (isLogin ? 'Welcome Back' : 'Join EV-ChargeMate')}
+          </h2>
+          <p>
+            {role === 'admin'
+              ? (isLogin ? 'Manage charging stations.' : 'Create a new admin account (requires admin privileges).')
+              : (isLogin ? 'Power up your journey.' : 'Create an account to start charging.')}
+          </p>
         </div>
 
         {error && <div className={`auth-alert ${error.includes('successful') ? 'success' : 'error'}`}>{error}</div>}
@@ -119,6 +149,7 @@ const Auth = () => {
             {!loading && <ArrowRight size={20} />}
           </button>
 
+          {role !== 'admin' && (
           <div className="google-auth-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
               <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.1)' }}></div>
@@ -130,7 +161,10 @@ const Auth = () => {
               type="button" 
               className="btn-secondary auth-btn" 
               style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}
-              onClick={() => window.location.href = "http://localhost:5000/api/user/auth/google"}
+              onClick={() => {
+                const base = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace(/\/$/, '');
+                window.location.href = `${base}/user/auth/google`;
+              }}
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -141,7 +175,29 @@ const Auth = () => {
               Continue with Google
             </button>
           </div>
+          )}
         </form>
+
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '18px' }}>
+          <button
+            type="button"
+            className="btn-secondary auth-btn"
+            style={{ maxWidth: 220, width: '100%', padding: '12px 16px' }}
+            onClick={() => navigate(`/auth?mode=${isLogin ? 'login' : 'register'}&role=user`)}
+            disabled={role === 'user'}
+          >
+            User
+          </button>
+          <button
+            type="button"
+            className="btn-secondary auth-btn"
+            style={{ maxWidth: 220, width: '100%', padding: '12px 16px' }}
+            onClick={() => navigate(`/auth?mode=${isLogin ? 'login' : 'register'}&role=admin`)}
+            disabled={role === 'admin'}
+          >
+            Admin
+          </button>
+        </div>
 
         <div className="auth-footer">
           <p>

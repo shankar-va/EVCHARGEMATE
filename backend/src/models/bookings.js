@@ -12,7 +12,7 @@ const bookingSchema=new mongoose.Schema({
     },
     status:{
         type:String,
-        enum:['booked','cancelled','completed'],
+        enum:['booked','confirmed','active','cancelled','completed'],
         required:true,
     },
     paymentStatus:{
@@ -27,9 +27,9 @@ const bookingSchema=new mongoose.Schema({
     razorpayPaymentId:{
         type:String
     },
-    qrCodeUrl:{
+    qrCode:{
         type:String,
-        
+        default:null
     },
     amount:{
         type:Number,

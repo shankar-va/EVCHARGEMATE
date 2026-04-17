@@ -9,6 +9,7 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const displayName = user?.name || user?.username || 'User';
 
   useEffect(() => {
     const handleScroll = () => {
@@ -39,8 +40,11 @@ const Navbar = () => {
           {user ? (
             <>
               <Link to="/dashboard" className="nav-link">Dashboard</Link>
+              {user?.role === 'admin' && (
+                <Link to="/admin/dashboard" className="nav-link">Admin Dashboard</Link>
+              )}
               <div className="user-menu">
-                <span className="user-greeting">Hi, {user.name?.split(' ')[0] || 'User'}</span>
+                <span className="user-greeting">Hi, {displayName?.split(' ')[0] || 'User'}</span>
                 <button onClick={handleLogout} className="btn-secondary nav-btn">Logout</button>
               </div>
             </>
@@ -68,6 +72,15 @@ const Navbar = () => {
         {user ? (
           <>
             <Link to="/dashboard" className="mobile-link" onClick={() => setIsMobileMenuOpen(false)}>Dashboard</Link>
+            {user?.role === 'admin' && (
+              <Link
+                to="/admin/dashboard"
+                className="mobile-link"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Admin Dashboard
+              </Link>
+            )}
             <button onClick={handleLogout} className="btn-secondary nav-btn mobile-btn">Logout</button>
           </>
         ) : (
