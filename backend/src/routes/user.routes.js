@@ -23,13 +23,14 @@ router.get('/auth/google/callback',
         const userId=req.user._id;
         const username=req.user.username;
         const accessToken=generateToken(userId, username, 'user');
-        res.cookie("accessToken",accessToken,{
-            maxAge:24*1000*60*60,
-            sameSite:'strict',
+        res.cookie('token', accessToken, {
+            secure:true,
+            sameSite:'none',
+            maxAge:24*60*60*1000,
             httpOnly:true
         });
-        // Success: Redirect straight into the beautiful new client dashboard
-        res.redirect(process.env.CLIENT_URL + "/dashboard");
+        // Success: Redirect straight into the beautiful absolute root
+        res.redirect(process.env.CLIENT_URL);
     }catch(error){
         return res.status(400).json({
             success:false,
