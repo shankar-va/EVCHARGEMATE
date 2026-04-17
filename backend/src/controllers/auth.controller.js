@@ -99,6 +99,7 @@ const login = (role) => async (req, res) => {
       success: true,
       message: `${role} login successful`,
       data: userObj,
+      token: token,
       role
     });
 

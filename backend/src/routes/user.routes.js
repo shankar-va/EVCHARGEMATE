@@ -29,8 +29,10 @@ router.get('/auth/google/callback',
             maxAge:24*60*60*1000,
             httpOnly:true
         });
-        // Success: Redirect straight into the beautiful absolute root
-        res.redirect(process.env.CLIENT_URL);
+        // Success: Redirect straight into the absolute root passing token in URL
+        const redirectUrl = new URL(process.env.CLIENT_URL);
+        redirectUrl.searchParams.set('token', accessToken);
+        res.redirect(redirectUrl.toString());
     }catch(error){
         return res.status(400).json({
             success:false,

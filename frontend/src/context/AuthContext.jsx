@@ -49,7 +49,16 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    // Attempt absolute core hydration upon mount exactly once safely validating HTTP cookies 
+    // Intercept Google OAuth cross-domain tokens explicitly mapping them statically
+    const searchParams = new URLSearchParams(window.location.search);
+    const tokenParams = searchParams.get('token');
+    
+    if (tokenParams) {
+      localStorage.setItem('token', tokenParams);
+      // Clean the URL beautifully natively without triggering page reloads
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     fetchUserData();
   }, []);
 
@@ -58,6 +67,7 @@ export const AuthProvider = ({ children }) => {
       clearUserScopedCache();
       const data = await api.login(credentials);
       if (data.success && data.data) {
+        if (data.token) localStorage.setItem('token', data.token);
         await fetchUserData(); // Reliably set everything in memory
       }
       return { success: true };

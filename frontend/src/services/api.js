@@ -29,13 +29,18 @@ const handleResponse = async (response) => {
 };
 
 const baseFetchOptions = {
-  credentials: "include",
+  credentials: "include", // Keeps legacy cookie fallback alive
   cache: "no-store",
 };
 
-const getJsonHeaders = () => ({
-  "Content-Type": "application/json",
-});
+const getJsonHeaders = () => {
+  const headers = {
+    "Content-Type": "application/json",
+  };
+  const token = localStorage.getItem("token");
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+};
 
 /**
  * MAIN API OBJECT
