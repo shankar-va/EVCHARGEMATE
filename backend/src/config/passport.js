@@ -10,13 +10,18 @@ passport.use(new GoogleStrategy({
   },
   async function(accessToken, refreshToken, profile, cb) {
     try{
-        const username=profile.displayName;
+        let username=profile.displayName;
         const email=profile.emails?.[0]?.value;
-        const userExist=await userModel.findOne({$or:[{username},{email}]});
+        const userExist=await userModel.findOne({email});
         if(userExist){
             return cb(null,userExist);
-
         }
+
+        const usernameTaken = await userModel.findOne({username});
+        if(usernameTaken) {
+            username = username + Math.floor(1000 + Math.random() * 9000);
+        }
+
         const newUser =await userModel.create({username,email,
             oauthProvider:"google"
         });
