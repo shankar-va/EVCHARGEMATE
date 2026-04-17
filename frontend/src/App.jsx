@@ -31,7 +31,7 @@ function App() {
       <Navbar />
       <main className="main-content">
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route index element={<Home />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/stations" element={<Stations />} />
           <Route 
