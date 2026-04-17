@@ -31,27 +31,36 @@ function App() {
       <Navbar />
       <main className="main-content">
         <Routes>
-          <Route index element={<Home />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/stations" element={<Stations />} />
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route
-            path="/admin/dashboard"
-            element={
-              <AdminProtectedRoute>
-                <AdminDashboard />
-              </AdminProtectedRoute>
-            }
-          />
-          <Route path="/station" element={<StationPortal />} />
-        </Routes>
+  {/* 🔥 Station FIRST to avoid any weird fallback */}
+  <Route path="/station" element={<StationPortal />} />
+
+  {/* Public routes */}
+  <Route path="/" element={<Home />} />
+  <Route path="/auth" element={<Auth />} />
+  <Route path="/stations" element={<Stations />} />
+
+  {/* Protected */}
+  <Route 
+    path="/dashboard" 
+    element={
+      <ProtectedRoute>
+        <Dashboard />
+      </ProtectedRoute>
+    } 
+  />
+
+  <Route
+    path="/admin/dashboard"
+    element={
+      <AdminProtectedRoute>
+        <AdminDashboard />
+      </AdminProtectedRoute>
+    }
+  />
+
+  {/* 🧪 Debug route */}
+  <Route path="*" element={<div>404 - Route Not Found</div>} />
+</Routes>
       </main>
     </div>
   );
