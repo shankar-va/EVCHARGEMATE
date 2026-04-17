@@ -33,7 +33,8 @@ app.use(cookieParser());
 
 app.use(passport.initialize());
 
-app.use(cors({}));
+app.use(cors({origin: true,
+  credentials: true}));
 
 mongodb();
 
