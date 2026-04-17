@@ -29,7 +29,7 @@ router.get('/auth/google/callback',
             httpOnly:true
         });
         // Success: Redirect straight into the beautiful new client dashboard
-        res.redirect('http://localhost:5173/dashboard');
+        res.redirect(process.env.CLIENT_URL + "/dashboard");
     }catch(error){
         return res.status(400).json({
             success:false,
