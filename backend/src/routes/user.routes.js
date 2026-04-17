@@ -23,7 +23,7 @@ router.get('/auth/google/callback',
         const userId=req.user._id;
         const username=req.user.username;
         const accessToken=generateToken(userId, username, 'user');
-        res.cookie('token', accessToken, {
+        res.cookie('accessToken', accessToken, {
             secure:true,
             sameSite:'none',
             maxAge:24*60*60*1000,
