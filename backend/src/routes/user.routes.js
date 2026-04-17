@@ -30,7 +30,7 @@ router.get('/auth/google/callback',
             httpOnly:true
         });
         // Success: Redirect straight into the absolute root passing token in URL
-        const redirectUrl = new URL(process.env.CLIENT_URL + "/#/dashboard"));
+        const redirectUrl = new URL(process.env.CLIENT_URL + "/#/dashboard");
         redirectUrl.searchParams.set('token', accessToken);
         res.redirect(redirectUrl.toString());
     }catch(error){
