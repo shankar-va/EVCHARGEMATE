@@ -5,11 +5,16 @@ const jwt = require('jsonwebtoken');
  */
 const authenticate = async (req, res, next) => {
   try {
-    let token = req.cookies?.accessToken;
-    
-    // Explicit cross-domain fallback via strict Bearer authorization
-    if (!token && req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
+    let token = null;
+
+    // 1. Explicit priority to Bearer Token dynamically injected by frontend
+    if (req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
       token = req.headers.authorization.split(" ")[1];
+    }
+
+    // 2. Fallback to Legacy Cookie locally if Bearer is absent
+    if (!token) {
+      token = req.cookies?.accessToken;
     }
 
     if (!token) {
