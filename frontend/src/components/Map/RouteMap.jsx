@@ -153,10 +153,12 @@ const RouteMap = ({ srcCoords, destCoords, routePoints, allStations, paginatedSt
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={false}
       >
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
-        />
+        
+      <TileLayer
+        url={`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=YOUR_NEW_CARTO_API_KEY`}
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      />
+
 
         <MapClickProcessor onClickMode={clickMode} onLocationSelected={onMapLocationSelect} />
         <PinchZoomHandler />
