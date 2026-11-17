@@ -155,7 +155,7 @@ const RouteMap = ({ srcCoords, destCoords, routePoints, allStations, paginatedSt
       >
         
       <TileLayer
-        url={`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=YOUR_NEW_CARTO_API_KEY`}
+        url={`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_5amh_1_a21f5768238e372caaf22832`}
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attributions">CARTO</a>'
       />
 
