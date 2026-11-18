@@ -106,6 +106,8 @@ const getClosestPoint = (lat, lng, routePoints) => {
   return closest;
 };
 
+const cartoApiKey = import.meta.env.VITE_CARTO_API_KEY;
+
 const RouteMap = ({ srcCoords, destCoords, routePoints, allStations, paginatedStations, onStationClick, onStationDetails, clickMode, onMapLocationSelect }) => {
   const [subRoutes, setSubRoutes] = useState({}); // mapped by station ID
 
@@ -144,7 +146,10 @@ const RouteMap = ({ srcCoords, destCoords, routePoints, allStations, paginatedSt
 
     fetchSubRoutes();
   }, [paginatedStations, routePoints]);
-
+  console.log(
+            "ROUTEMAP VERSION WITH KEY:",
+            "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=TEST123"
+          );
   return (
     <div style={{ height: '500px', width: '100%', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
       <MapContainer 
@@ -155,9 +160,16 @@ const RouteMap = ({ srcCoords, destCoords, routePoints, allStations, paginatedSt
       >
         
       <TileLayer
-        url={`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_5amh_1_a21f5768238e372caaf22832`}
+        url={`https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${cartoApiKey}`}
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        maxZoom={20}
+        eventHandlers={{
+  tileloadstart: (event) => {
+    console.log("TILE REQUEST STARTED:", event.tile?.src);
+  }
+}}
       />
+
 
 
         <MapClickProcessor onClickMode={clickMode} onLocationSelected={onMapLocationSelect} />
