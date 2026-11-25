@@ -65,7 +65,10 @@ const PinchZoomHandler = () => {
     };
     const container = map.getContainer();
     container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => container.removeEventListener('wheel', handleWheel);
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+      if (zoomTimeout) clearTimeout(zoomTimeout);
+    };
   }, [map]);
   return null;
 };
@@ -107,6 +110,9 @@ const getClosestPoint = (lat, lng, routePoints) => {
 };
 
 const cartoApiKey = import.meta.env.VITE_CARTO_API_KEY;
+const tileUrl = cartoApiKey
+  ? `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${cartoApiKey}`
+  : `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png`;
 
 const RouteMap = ({ srcCoords, destCoords, routePoints, allStations, paginatedStations, onStationClick, onStationDetails, clickMode, onMapLocationSelect }) => {
   const [subRoutes, setSubRoutes] = useState({}); // mapped by station ID
@@ -146,10 +152,7 @@ const RouteMap = ({ srcCoords, destCoords, routePoints, allStations, paginatedSt
 
     fetchSubRoutes();
   }, [paginatedStations, routePoints]);
-  console.log(
-            "ROUTEMAP VERSION WITH KEY:",
-            "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=TEST123"
-          );
+
   return (
     <div style={{ height: '500px', width: '100%', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
       <MapContainer 
@@ -158,19 +161,11 @@ const RouteMap = ({ srcCoords, destCoords, routePoints, allStations, paginatedSt
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={false}
       >
-        
-      <TileLayer
-        url={`https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${cartoApiKey}`}
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        maxZoom={20}
-        eventHandlers={{
-  tileloadstart: (event) => {
-    console.log("TILE REQUEST STARTED:", event.tile?.src);
-  }
-}}
-      />
-
-
+        <TileLayer
+          url={tileUrl}
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          maxZoom={20}
+        />
 
         <MapClickProcessor onClickMode={clickMode} onLocationSelected={onMapLocationSelect} />
         <PinchZoomHandler />
@@ -227,8 +222,7 @@ const RouteMap = ({ srcCoords, destCoords, routePoints, allStations, paginatedSt
                   <button
                     onClick={() => {
                       if (onStationDetails) onStationDetails(station);
-                      if (!onStationDetails && onStationClick) onStationClick(station);
-                      if (onStationDetails && onStationClick) onStationClick(station);
+                      if (onStationClick) onStationClick(station);
                     }}
                     style={{ marginTop: '5px', padding: '4px 8px', background: 'var(--accent-neon-blue)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                   >

@@ -89,4 +89,5 @@ jobs:
       - name: Trigger Render Production Deploy
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          
