@@ -33,7 +33,15 @@ app.use(cookieParser());
 
 app.use(passport.initialize());
 
-app.use(cors({origin: true,
+const allowedOrigins = [process.env.CLIENT_URL, 'http://localhost:5173', 'http://localhost:3000'].filter(Boolean);
+
+app.use(cors({origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+    } else {
+        callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true}));
 
 mongodb();
@@ -50,9 +58,14 @@ app.use("/api/qr", require("./routes/qr.routes"));
 
 app.use("/api/admin", adminRoutes);
 
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', uptime: process.uptime() });
+});
+
+const PORT = process.env.PORT || 5000;
+
 app.use(errorHandler);
 
-const PORT=process.env.PORT;
-app.listen(PORT,()=>{
+app.listen(PORT,'0.0.0.0',()=>{
     console.log(`Server is listening at ${PORT}`)
 })

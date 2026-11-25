@@ -137,7 +137,7 @@ RAZORPAY_SECRET=SECRET🤫
 ### Frontend
 
 ```
-VITE_API_URL=https://evchargemate-backend.onrender.com
+VITE_API_BASE_URL=https://evchargemate-backend.onrender.com
 ```
 
 ---

@@ -90,6 +90,7 @@ export const AuthProvider = ({ children }) => {
       clearUserScopedCache();
       const data = await api.adminLogin(credentials);
       if (data.success && data.data) {
+        if (data.token) localStorage.setItem('token', data.token);
         setUser(data.data); // Admins typically lack standard booking layouts
         setLoading(false);
       }
